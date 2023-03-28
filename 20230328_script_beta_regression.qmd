@@ -1,0 +1,123 @@
+---
+title: "Beta-Regression Code for Negative Affect Using Tree-Based Models to Identify Factors Contributing to Trait Negative Affect in Adults with and without Major Depression Manuscript"
+author: "Catalina Canizares"
+date: "2023-04-28"
+format: html
+---
+
+
+```{r}
+#| include: false
+#| label: packages
+
+library(tidyverse)
+library(betareg)
+library(car)
+library(sjPlot)
+library(readxl)
+```
+
+# Loading the data
+```{r}
+affectivity_data_df <-read_excel("data/Psico_New.xlsx")
+```
+
+# Wrangle data
+
+```{r demographics}
+rename_binary <- function(x) {
+  return(
+    case_when(
+      x == 1 ~ " Yes",
+      x == 0 ~ "No"
+    )
+  )
+}
+
+demographics_df <-
+  affectivity_data_df  %>%
+  select(
+    Age = EDAD,
+    `Disconnection and Rejection` = DYRYSQ, 
+    `Impaired Autonomy` = PADYSQ, 
+    `Impaired Limits` =LIYSQ, 
+    `Other-Directedness` = THOYSQ, 
+    `Over-Vigilance/Inhibition` = SEIYSQ,
+    `IDER Score` = IDERR_total, 
+    `Number of Stressful Events` = ESVfrec, 
+    Sex = SEXO,
+    `Negative Attribution` = dummyPosNeg, 
+    `Unexpected Attribution` = dummyEsInes, 
+    `Out of Control Attribution`  = dummyConNocon,
+    `Childhood Adversity` = ABUSOINFANCIA, 
+    `Physical Excercise` = deporte, 
+    `Smoking Cigarettes` = fuma, 
+    `Alcohol Use` = Alcohol, 
+    `Psychoactive Substance Use` = psicoactiva
+    ) %>%
+  mutate(across(Sex:`Psychoactive Substance Use`, factor)) %>% 
+  mutate(
+    Sex = case_when(
+      Sex == 1 ~ "Female",
+      Sex == 0 ~ "Male"
+    )
+  ) %>%
+  mutate_at(
+    vars(
+      `Negative Attribution`:`Psychoactive Substance Use`),
+      ~ rename_binary(.)) 
+
+```
+
+
+## Beta Regression
+
+```{r data-regression}
+
+# I have to transform the outcome to be from 0 to 1 given that it is a score that only goes from 10 to 40, it is bounded. This function was created by Dr. Gabriel Odom. Please find the documentation in script named liker_squeezer_202303314
+
+Squeeze <- function(xBdd, lower, upper, squeeze = 0.5) {
+	N <- length(xBdd)
+	x1 <- (xBdd - lower) / (upper - lower)
+	x2 <- (x1 * (N - 1) + squeeze) / N
+	x2
+	
+}
+
+# Transforming the variable
+affectivity_df <- demographics_df %>% 
+  mutate(IDER = Squeeze(
+    xBdd = demographics_df$`IDER Score`,
+	  lower = 10L, upper = 40L
+    )
+  ) %>% 
+  select(-`IDER Score`)
+
+```
+
+```{r beta-regression}
+
+beta_fit <- betareg(IDER ~ ., data = affectivity_df)
+summary_beta <- summary(beta_fit)
+conf_ints <- confint(beta_fit, level = 0.95)
+
+summary_beta
+conf_ints 
+```
+
+```{r}
+plot(beta_fit)
+```
+
+
+```{r}
+vif(beta_fit)
+```
+
+
+```{r}
+tab_model(beta_fit,
+          title = "Table 3 Beta Regression for the IDER Score in a Sample of
+          342 Depressed and Non-depressed Adults")
+```
+

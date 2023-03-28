@@ -1,0 +1,213 @@
+---
+title: "Regression Tree Code for Negative Affect Using Tree-Based Models to Identify Factors Contributing to Trait Negative Affect in Adults with and without Major Depression Manuscript"
+author: "Catalina Canizares"
+date: "2023-02-03"
+output: html_document
+---
+
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+```{r tidyverse, include=FALSE, message=FALSE}
+library(readxl)
+library(conflicted)
+conflict_prefer("filter", "dplyr", quiet = TRUE)
+conflict_prefer("lag", "dplyr", quiet = TRUE)
+suppressPackageStartupMessages(library(tidyverse))
+
+# suppress "`summarise()` has grouped output by " messages
+options(dplyr.summarise.inform=F)  
+suppressPackageStartupMessages(library(tidymodels))
+```
+
+# The data
+
+```{r}
+affectivity_data_df <-read_excel("../data/Psico_New.xlsx")
+```
+
+# Wrangling the Data
+
+```{r wrangle}
+
+analysis_df <-
+  affectivity_data_df  %>%
+  select(
+    Age = EDAD,
+    DYRYSQ, PADYSQ, LIYSQ, THOYSQ, SEIYSQ, IDERR_total, 
+    stress_events = ESVfrec, 
+    Sex = SEXO,
+    is_negative = dummyPosNeg, 
+    is_unexpected = dummyEsInes, 
+    is_noControl = dummyConNocon,
+    is_abuse = ABUSOINFANCIA, 
+    is_sport = deporte, 
+    is_smoke = fuma, 
+    is_alcohol = Alcohol, 
+    is_drugs = psicoactiva,
+    )%>%
+  mutate(across(Sex:is_drugs , factor)) %>% 
+  janitor::clean_names()
+
+```
+
+# Splitting the data into training and testing 
+
+```{r split}
+set.seed(234)
+
+analysis_split <-
+  analysis_df %>% 
+  initial_split(strata = iderr_total)
+
+saveRDS(analysis_split, "results_tree/analysis_split.rds")
+
+
+analysis_train <- training(analysis_split)
+analysis_test <- testing(analysis_split)
+
+saveRDS(analysis_train, "results_tree/analysis_train.rds")
+saveRDS(analysis_test, "results_tree/analysis_test.rds")
+
+
+```
+
+# Setting the Cross validation object
+
+```{r cross-validation}
+
+cv_folds <-
+   vfold_cv(analysis_train, strata = iderr_total, v = 5)
+
+saveRDS(cv_folds, "results_tree/cv_folds.RDS")
+cv_folds <- readRDS("results_tree/cv_folds.RDS")
+```
+
+# Setting the recepie, model and workflow
+
+```{r the-model, eval=FALSE}
+
+# Building the workflow with  tidymodels 
+
+tree_recipe <- 
+  recipe(formula = iderr_total ~ ., data = analysis_train) 
+
+tree_model <- 
+  decision_tree(cost_complexity = tune()) %>% 
+  set_engine("rpart") %>% 
+  set_mode("regression")
+
+tree_workflow <- 
+  workflow() %>% 
+  add_recipe(tree_recipe) %>% 
+  add_model(tree_model)
+
+```
+
+# Tunning and choosing the best Complexity Parameter
+
+```{r tunning}
+# use multiple CPU cores for faster processing
+doParallel::registerDoParallel()  
+
+cart_tune <- 
+  tree_workflow %>% 
+  tune_grid(resamples = cv_folds,
+            grid = 20)
+  
+
+doParallel::stopImplicitCluster() 
+
+saveRDS(cart_tune, "results_tree/cart_tune.RDS")
+
+# Viewing and Choosing the Best CP based on r squared value to balance the complexity of the tree and avoid overfitting
+
+show_best(cart_tune, metric = "rsq")
+
+bestPlot_cart <- 
+  autoplot(cart_tune)
+
+saveRDS(bestPlot_cart, "results_tree/bestPlot_cart.RDS")
+
+cart_best <- select_best(cart_tune, metric = "rsq")
+
+saveRDS(cart_best, "results_tree/cart_best.RDS")
+  
+```
+
+
+# Finalizing workflow with the best CP
+
+```{r final-workflow}
+
+# Fitting the model with the best CP chosen before 
+
+cart_final_workflow <- 
+  tree_workflow %>% 
+  finalize_workflow(cart_best)
+
+affect_fit <- 
+  cart_final_workflow |>  
+  fit(data = analysis_train)
+
+
+```
+
+
+# Results
+
+```{r the-results}
+
+the_results <-
+  cart_final_workflow %>% 
+  last_fit(split = analysis_split, 
+           metrics = metric_set(rsq, rmse))
+
+saveRDS(the_results , "results_tree/the_results .RDS")
+
+# Metrics
+final_metrics <- 
+  the_results %>%
+  collect_metrics(summarize = TRUE)
+
+saveRDS(final_metrics, "results_tree/final_metrics.RDS")
+
+```
+
+# Exploring the prediction per person
+```{r the-prediction}
+the_prediction <-  
+  the_results %>% 
+  collect_predictions()
+
+saveRDS(the_prediction, "results_tree/the_prediction.RDS")
+
+prediction_plot <- 
+  collect_predictions(the_results) %>% 
+  ggplot(aes(iderr_total, .pred)) +
+  geom_abline(lty = 2, color = "gray50") +
+  geom_point(alpha = 0.5, color = "midnightblue") +
+  coord_equal()
+```
+
+# Plotting the tree
+
+```{r the-tree}
+
+cart_trained <-  the_results %>% extract_fit_parsnip()
+cart_tree_fit <- cart_trained$fit
+ 
+saveRDS(cart_tree_fit, "results_tree/01_tree.RDS")
+
+rpart.plot::rpart.plot(cart_tree_fit, roundint = FALSE)
+
+```
+
+
+
