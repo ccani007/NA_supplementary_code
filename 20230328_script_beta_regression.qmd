@@ -4,6 +4,8 @@ author: "Catalina Canizares"
 date: "2023-04-28"
 format: html
 self-contained: true
+editor_options: 
+  chunk_output_type: console
 ---
 
 
@@ -106,10 +108,14 @@ summary_beta
 conf_ints 
 ```
 
-```{r}
+```{r include=FALSE}
 plot(beta_fit)
 ```
 
+![](assumption_plots/cook.png)
+![](assumption_plots/leverage.png)
+![](assumption_plots/linear.png)
+![](assumption_plots/Residuals_observations.png)
 
 ```{r}
 vif(beta_fit)
