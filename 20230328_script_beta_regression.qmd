@@ -3,6 +3,7 @@ title: "Beta-Regression Code for Negative Affect Using Tree-Based Models to Iden
 author: "Catalina Canizares"
 date: "2023-04-28"
 format: html
+self-contained: true
 ---
 
 
