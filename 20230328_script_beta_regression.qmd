@@ -1,5 +1,5 @@
 ---
-title: "Beta-Regression Code for Negative Affect Using Tree-Based Models to Identify Factors Contributing to Trait Negative Affect in Adults with and without Major Depression Manuscript"
+title: "Beta-Regression Code for Using Tree-Based Models to Identify Factors Contributing to Trait Negative Affect in Adults with and without Major Depression Manuscript"
 author: "Catalina Canizares"
 date: "2023-04-28"
 format: html
