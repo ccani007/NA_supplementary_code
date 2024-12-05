@@ -11,3 +11,6 @@ The repository includes the following files:
 
 + 20230328_script_beta_regression.qmd and .html: These files contain the code used to run the beta regression, the plots that checked the assumptions for the beta regression, the vif test, and the results of the beta regression.
 Use this link to visualize the html https://htmlpreview.github.io/ 
+
+
+[View the HTML file](./20230328_script_beta_regression.html)
